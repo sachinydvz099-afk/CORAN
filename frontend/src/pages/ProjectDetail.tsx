@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { projectAPI, characterAPI, sceneAPI, renderAPI } from '../api/client';
+import { projectAPI, renderAPI } from '../api/client';
 import { useProjectStore } from '../store/projectStore';
 import {
   ArrowLeftIcon,
   PlayIcon,
   TrashIcon,
-  PencilIcon,
 } from '@heroicons/react/24/outline';
 
 export default function ProjectDetail() {
@@ -37,7 +36,7 @@ export default function ProjectDetail() {
 
   const handleRender = async () => {
     try {
-      const response = await renderAPI.createJob(id!, {
+      await renderAPI.createJob(id!, {
         render_type: 'final_video',
         resolution: '1080p',
         output_format: 'mp4',
