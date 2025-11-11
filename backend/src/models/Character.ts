@@ -6,6 +6,7 @@ export interface ICharacter extends Document {
   role: string;
   imageUrl?: string;
   imageMetadata?: any;
+  metadata?: any;
   voiceStyleId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -17,6 +18,7 @@ const CharacterSchema = new Schema<ICharacter>({
   role: { type: String, required: true },
   imageUrl: { type: String },
   imageMetadata: { type: Schema.Types.Mixed },
+  metadata: { type: Schema.Types.Mixed },
   voiceStyleId: { type: Schema.Types.ObjectId, ref: 'VoiceStyle' },
 }, {
   timestamps: true,

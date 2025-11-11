@@ -4,11 +4,13 @@ export interface IScene extends Document {
   projectId: mongoose.Types.ObjectId;
   sceneNumber: number;
   title: string;
+  description?: string;
   startTimeSeconds: number;
   endTimeSeconds: number;
   status: string;
   storyboardUrl?: string;
   dialogueText?: string;
+  metadata?: any;
   characters: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
@@ -18,11 +20,13 @@ const SceneSchema = new Schema<IScene>({
   projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
   sceneNumber: { type: Number, required: true },
   title: { type: String, required: true },
+  description: { type: String },
   startTimeSeconds: { type: Number, required: true },
   endTimeSeconds: { type: Number, required: true },
   status: { type: String, default: 'pending' },
   storyboardUrl: { type: String },
   dialogueText: { type: String },
+  metadata: { type: Schema.Types.Mixed },
   characters: [{ type: Schema.Types.ObjectId, ref: 'Character' }],
 }, {
   timestamps: true,

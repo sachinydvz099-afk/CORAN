@@ -10,6 +10,7 @@ export interface IProject extends Document {
   status: string;
   currentVersionId?: mongoose.Types.ObjectId;
   thumbnailUrl?: string;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
@@ -25,6 +26,7 @@ const ProjectSchema = new Schema<IProject>({
   status: { type: String, default: 'draft' },
   currentVersionId: { type: Schema.Types.ObjectId, ref: 'Version' },
   thumbnailUrl: { type: String },
+  metadata: { type: Schema.Types.Mixed },
   completedAt: { type: Date },
 }, {
   timestamps: true,

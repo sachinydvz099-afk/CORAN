@@ -9,13 +9,12 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token (guest mode - no actual token needed)
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // In guest mode, we don't send auth token
+    // Backend should be modified to allow guest access or we can send a dummy token
+    config.headers.Authorization = `Bearer guest-token`;
     return config;
   },
   (error) => Promise.reject(error)
@@ -25,10 +24,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login';
-    }
+    // In guest mode, don't redirect on 401 errors
+    // Just return the error for handling in components
     return Promise.reject(error);
   }
 );

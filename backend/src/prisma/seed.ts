@@ -5,6 +5,22 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding database...');
 
+  // Create guest user for no-auth mode
+  const guestUser = await prisma.user.upsert({
+    where: { email: 'guest@example.com' },
+    update: {},
+    create: {
+      id: 'guest',
+      email: 'guest@example.com',
+      passwordHash: 'no-password-required',
+      name: 'Guest User',
+      subscriptionTier: 'free',
+      creditsBalance: 999999, // Unlimited credits for guest
+    },
+  });
+
+  console.log('Created/updated guest user:', guestUser.email);
+
   // Create voice styles
   const voiceStyles = await Promise.all([
     prisma.voiceStyle.create({

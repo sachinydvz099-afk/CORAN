@@ -1,6 +1,16 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
 import { prisma } from '../utils/prisma';
+import { Project } from '../models/Project';
+import { Character } from '../models/Character';
+import { Scene } from '../models/Scene';
+import { analyzeScript } from './ai-script-analyzer.service';
+import { 
+  generateCharacterVisual, 
+  generateCompleteVideo,
+  generateVoiceAudio,
+  generateSceneBackground
+} from './ai-video-generator.service';
 
 const AI_SCENE_SERVICE_URL = process.env.AI_SCENE_SERVICE_URL || 'http://localhost:5001';
 const AI_RENDER_SERVICE_URL = process.env.AI_RENDER_SERVICE_URL || 'http://localhost:5003';
@@ -9,47 +19,88 @@ export async function processSceneGeneration(projectId: string, data: any) {
   try {
     logger.info(`Generating scenes for project: ${projectId}`);
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
+    const project = await Project.findById(projectId);
 
     if (!project) {
       throw new Error('Project not found');
     }
 
-    // Call AI Scene Service to analyze prompt and generate scenes
-    const response = await axios.post(`${AI_SCENE_SERVICE_URL}/generate-scenes`, {
-      prompt: project.promptText,
-      target_length_minutes: project.targetLengthMinutes,
-      style: project.style,
-    }, {
-      timeout: 120000, // 2 minutes
-    });
-
-    if (!response.data || !Array.isArray(response.data.scenes)) {
-      throw new Error('Invalid response from AI Scene Service');
-    }
-
-    // Create scenes in database
-    const scenes = await Promise.all(
-      response.data.scenes.map((scene: any, index: number) =>
-        prisma.scene.create({
-          data: {
-            projectId,
-            sceneNumber: index + 1,
-            title: scene.title,
-            startTimeSeconds: scene.start_time_seconds,
-            endTimeSeconds: scene.end_time_seconds,
-            status: 'pending',
-            storyboardUrl: scene.storyboard_url || null,
-            dialogueText: scene.dialogue_text || null,
-          },
-        })
-      )
+    // Use AI to analyze the script and generate intelligent scene breakdown
+    logger.info('Using AI to analyze script and generate scenes');
+    const scriptAnalysis = await analyzeScript(
+      project.promptText,
+      project.targetLengthMinutes,
+      project.style
     );
 
-    logger.info(`Generated ${scenes.length} scenes for project: ${projectId}`);
-    return scenes;
+    // Generate characters from analysis
+    logger.info(`Creating ${scriptAnalysis.characters.length} characters`);
+    const characterMap = new Map();
+    
+    for (const char of scriptAnalysis.characters) {
+      // Generate character visual
+      const imageUrl = await generateCharacterVisual(
+        char.name,
+        char.appearance,
+        project.style
+      );
+
+      const character = await Character.create({
+        projectId,
+        name: char.name,
+        role: char.role,
+        imageUrl,
+        metadata: {
+          personality: char.personality,
+          appearance: char.appearance,
+          voiceType: char.voiceType
+        }
+      });
+
+      characterMap.set(char.name, character._id);
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Create scenes in database with full details
+    logger.info(`Creating ${scriptAnalysis.scenes.length} scenes`);
+    const scenes = [];
+    let cumulativeTime = 0;
+
+    for (const sceneData of scriptAnalysis.scenes) {
+      const scene = await Scene.create({
+        projectId,
+        sceneNumber: sceneData.sceneNumber,
+        title: sceneData.title,
+        description: sceneData.description,
+        startTimeSeconds: cumulativeTime,
+        endTimeSeconds: cumulativeTime + sceneData.duration,
+        status: 'pending',
+        dialogueText: JSON.stringify(sceneData.dialogue),
+        metadata: {
+          visualElements: sceneData.visualElements,
+          backgroundMusic: sceneData.backgroundMusic,
+          cameraAngles: sceneData.cameraAngles,
+          characters: sceneData.dialogue.map(d => d.character)
+        }
+      });
+
+      scenes.push(scene);
+      cumulativeTime += sceneData.duration;
+    }
+
+    // Update project with theme and mood
+    await Project.findByIdAndUpdate(projectId, {
+      metadata: {
+        theme: scriptAnalysis.theme,
+        mood: scriptAnalysis.mood,
+        totalDuration: scriptAnalysis.totalDuration
+      }
+    });
+
+    logger.info(`Generated ${scenes.length} scenes and ${scriptAnalysis.characters.length} characters for project: ${projectId}`);
+    return { scenes, characters: scriptAnalysis.characters };
   } catch (error: any) {
     logger.error(`Failed to generate scenes for project ${projectId}:`, error.message);
     throw error;
@@ -63,58 +114,61 @@ export async function processSceneRender(data: any): Promise<string> {
 
     logger.info(`Rendering scene: ${sceneId} for project: ${projectId}`);
 
-    const scene = await prisma.scene.findUnique({
-      where: { id: sceneId },
-      include: {
-        project: true,
-        sceneCharacters: {
-          include: {
-            character: {
-              include: {
-                voiceStyle: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
+    const scene = await Scene.findById(sceneId);
     if (!scene) {
       throw new Error('Scene not found');
     }
 
-    // Call AI Render Service
-    const response = await axios.post(`${AI_RENDER_SERVICE_URL}/render-scene`, {
-      scene_id: sceneId,
-      scene_number: scene.sceneNumber,
-      title: scene.title,
-      duration: scene.endTimeSeconds - scene.startTimeSeconds,
-      dialogue: scene.dialogueText,
-      characters: scene.sceneCharacters.map(sc => ({
-        name: sc.character.name,
-        role: sc.character.role,
-        image_url: sc.character.imageUrl,
-        voice_style: sc.character.voiceStyle,
-      })),
-      style: scene.project.style,
-      resolution: payload?.resolution || '1080p',
-      output_format: payload?.output_format || 'mp4',
-    }, {
-      timeout: 600000, // 10 minutes for scene rendering
-    });
-
-    if (!response.data || !response.data.output_url) {
-      throw new Error('Invalid response from AI Render Service');
+    const project = await Project.findById(projectId);
+    if (!project) {
+      throw new Error('Project not found');
     }
 
-    // Update scene status
-    await prisma.scene.update({
-      where: { id: sceneId },
-      data: { status: 'completed' },
+    // Parse dialogue from scene
+    const dialogue = scene.dialogueText ? JSON.parse(scene.dialogueText) : [];
+    const metadata = scene.metadata || {};
+
+    // Get characters for this scene
+    const characterNames = metadata.characters || [];
+    const characters = await Character.find({ 
+      projectId,
+      name: { $in: characterNames }
+    });
+
+    // Generate scene background
+    logger.info('Generating scene background');
+    const backgroundUrl = await generateSceneBackground(
+      scene.description || scene.title,
+      project.style,
+      metadata.visualElements || []
+    );
+
+    // Generate audio for all dialogue
+    logger.info('Generating voice audio');
+    const fullDialogue = dialogue.map((d: any) => d.text).join(' ');
+    const primaryCharacter = characters.find((c: any) => 
+      c.name === (dialogue[0]?.character || '')
+    );
+    
+    const audioUrl = fullDialogue ? await generateVoiceAudio(
+      fullDialogue,
+      primaryCharacter?.metadata?.voiceType || 'clear and articulate',
+      dialogue[0]?.emotion || 'neutral'
+    ) : '';
+
+    // Update scene with generated assets
+    await Scene.findByIdAndUpdate(sceneId, {
+      storyboardUrl: backgroundUrl,
+      status: 'completed',
+      metadata: {
+        ...metadata,
+        backgroundUrl,
+        audioUrl
+      }
     });
 
     logger.info(`Completed scene render: ${sceneId}`);
-    return response.data.output_url;
+    return backgroundUrl;
   } catch (error: any) {
     logger.error('Failed to render scene:', error.message);
     throw error;
@@ -128,78 +182,63 @@ export async function processFinalVideoRender(data: any): Promise<string> {
     logger.info(`Rendering final video for project: ${projectId}`);
 
     // Get all completed scenes
-    const scenes = await prisma.scene.findMany({
-      where: { projectId },
-      orderBy: { sceneNumber: 'asc' },
-    });
-
-    // First, ensure all scenes are rendered
-    const renderJobs = await prisma.renderJob.findMany({
-      where: {
-        projectId,
-        jobType: 'scene_render',
-        status: 'success',
-      },
-    });
-
-    if (renderJobs.length !== scenes.length) {
-      throw new Error('Not all scenes have been rendered');
+    const scenes = await Scene.find({ projectId }).sort({ sceneNumber: 1 });
+    const project = await Project.findById(projectId);
+    
+    if (!project) {
+      throw new Error('Project not found');
     }
 
-    const sceneUrls = renderJobs
-      .sort((a, b) => {
-        const sceneA = scenes.find(s => (a.payload as any)?.scene_id === s.id);
-        const sceneB = scenes.find(s => (b.payload as any)?.scene_id === s.id);
-        return (sceneA?.sceneNumber || 0) - (sceneB?.sceneNumber || 0);
-      })
-      .map(job => job.outputUrl);
+    // Get all characters
+    const characters = await Character.find({ projectId });
 
-    // Call AI Render Service to stitch scenes together
-    const response = await axios.post(`${AI_RENDER_SERVICE_URL}/stitch-video`, {
-      project_id: projectId,
-      scene_urls: sceneUrls,
-      resolution: payload?.resolution || '1080p',
-      output_format: payload?.output_format || 'mp4',
-    }, {
-      timeout: 1800000, // 30 minutes for final video
+    // Prepare scene data for video generation
+    const sceneData = scenes.map(scene => {
+      const metadata = scene.metadata || {};
+      const dialogue = scene.dialogueText ? JSON.parse(scene.dialogueText) : [];
+      
+      return {
+        sceneNumber: scene.sceneNumber,
+        description: scene.description || scene.title,
+        duration: scene.endTimeSeconds - scene.startTimeSeconds,
+        dialogue,
+        visualElements: metadata.visualElements || [],
+        cameraAngles: metadata.cameraAngles || ['medium shot']
+      };
     });
 
-    if (!response.data || !response.data.output_url) {
-      throw new Error('Invalid response from AI Render Service');
-    }
+    const characterVisuals = characters.map((char: any) => ({
+      characterId: char._id.toString(),
+      name: char.name,
+      imageUrl: char.imageUrl || '',
+      style: project.style
+    }));
+
+    // Generate complete video using AI
+    logger.info('Generating complete animated video...');
+    const { sceneVideos, finalVideoUrl } = await generateCompleteVideo(
+      characterVisuals,
+      sceneData,
+      project.style
+    );
 
     // Update project status
-    await prisma.project.update({
-      where: { id: projectId },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
-        thumbnailUrl: response.data.thumbnail_url,
-      },
+    await Project.findByIdAndUpdate(projectId, {
+      status: 'completed',
+      completedAt: new Date(),
+      metadata: {
+        ...project.metadata,
+        finalVideoUrl,
+        sceneVideos: sceneVideos.map(sv => ({
+          sceneId: sv.sceneId,
+          videoUrl: sv.videoUrl,
+          duration: sv.duration
+        }))
+      }
     });
-
-    // Send notification to user
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
-
-    if (project) {
-      await prisma.notification.create({
-        data: {
-          userId: project.userId,
-          type: 'render_complete',
-          payload: {
-            project_id: projectId,
-            project_title: project.title,
-            output_url: response.data.output_url,
-          },
-          isRead: false,
-        },
-      });
-    }
 
     logger.info(`Completed final video render for project: ${projectId}`);
-    return response.data.output_url;
+    return finalVideoUrl;
   } catch (error: any) {
     logger.error('Failed to render final video:', error.message);
     throw error;

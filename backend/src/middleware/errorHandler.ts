@@ -13,6 +13,12 @@ export class AppError extends Error {
   }
 }
 
+export const asyncHandler = (fn: Function) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
 export const errorHandler = (
   err: Error | AppError,
   req: Request,

@@ -17,6 +17,12 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
       return res.status(401).json({ error: 'Authentication required' });
     }
 
+    // Allow guest token for no-auth mode
+    if (token === 'guest-token') {
+      req.userId = 'guest'; // Set a guest user ID
+      return next();
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
     req.userId = decoded.userId;
     next();

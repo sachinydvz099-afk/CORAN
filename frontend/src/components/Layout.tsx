@@ -1,15 +1,9 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { ArrowRightOnRectangleIcon, BellIcon } from '@heroicons/react/24/outline';
+import { BellIcon } from '@heroicons/react/24/outline';
 
 export default function Layout() {
-  const { user, logout } = useAuthStore();
-  const navigate = useNavigate();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  const { user } = useAuthStore();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -33,6 +27,13 @@ export default function Layout() {
                 >
                   Create New
                 </Link>
+                <Link
+                  to="/auto-video"
+                  className="bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1"
+                >
+                  <span>🎬</span>
+                  AI Video Generator
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -46,13 +47,6 @@ export default function Layout() {
               </button>
               <div className="flex items-center space-x-3">
                 <span className="text-sm text-gray-700 dark:text-gray-300">{user?.name}</span>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                  title="Logout"
-                >
-                  <ArrowRightOnRectangleIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                </button>
               </div>
             </div>
           </div>

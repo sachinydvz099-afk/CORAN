@@ -1,6 +1,36 @@
 # AI-Studio Platform
 
-An online platform where users submit story prompts and the system auto-generates full-length (≥40 minute) animated videos with AI-selected characters, scenes, voice/dialogue, and motion rendering.
+An online platform where users submit story prompts and the system **auto-generates full-length (≥40 minute) animated videos** with AI-selected characters, scenes, voice/dialogue, and motion rendering.
+
+## 🎬 NEW: Fully Automated AI Video Generation
+
+**Transform any script into a complete animated video in minutes!**
+
+This platform now features advanced AI-powered video generation that can:
+- ✨ Analyze scripts using GPT-4 and intelligently break them into scenes
+- 🎭 Auto-generate character designs with Stability AI
+- 🎙️ Create voice-overs with emotional delivery using ElevenLabs
+- 🎨 Generate scene backgrounds and visual elements
+- 🎞️ Assemble complete 40+ minute animated videos automatically
+
+### Quick Start: Generate Your First Video
+
+```bash
+# 1. Start the backend
+cd backend
+npm install
+npm run dev
+
+# 2. Start the frontend
+cd frontend
+npm install
+npm run dev
+
+# 3. Visit http://localhost:5173/auto-video
+# 4. Enter your script and click "Generate Video"
+```
+
+See [AI_VIDEO_GENERATION_GUIDE.md](./AI_VIDEO_GENERATION_GUIDE.md) for detailed documentation.
 
 ## 🏗️ Architecture Overview
 

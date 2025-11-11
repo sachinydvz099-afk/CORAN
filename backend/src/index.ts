@@ -12,6 +12,7 @@ import renderRoutes from './routes/render.routes';
 import billingRoutes from './routes/billing.routes';
 import voiceRoutes from './routes/voice.routes';
 import notificationRoutes from './routes/notification.routes';
+import autoVideoRoutes from './routes/auto-video.routes';
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ app.use('/api', renderRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/voice_styles', voiceRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/auto-video', autoVideoRoutes);
 
 // Error handling
 app.use(errorHandler);

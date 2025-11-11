@@ -15,15 +15,23 @@ interface AuthState {
   logout: () => void;
 }
 
+// Guest user for no-auth mode
+const guestUser: User = {
+  user_id: 'guest',
+  email: 'guest@example.com',
+  name: 'Guest User',
+  subscription_tier: 'free',
+  credits_balance: 999999,
+};
+
 export const useAuthStore = create<AuthState>()((set) => ({
-  token: localStorage.getItem('auth_token'),
-  user: null,
+  token: 'guest-token', // Always authenticated as guest
+  user: guestUser,
   setAuth: (token: string, user: User) => {
     localStorage.setItem('auth_token', token);
     set({ token, user });
   },
   logout: () => {
-    localStorage.removeItem('auth_token');
-    set({ token: null, user: null });
+    // Do nothing in guest mode
   },
 }));
