@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: ai-studio-backend
+    env: node
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 3000
+
+  - type: web
+    name: ai-studio-frontend
+    env: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://ai-studio-backend.onrender.com/api/*
+    envVars:
+      - key: VITE_API_URL
+        value: https://ai-studio-backend.onrender.com/api

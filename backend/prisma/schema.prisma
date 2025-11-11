@@ -1,0 +1,233 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String            @id @default(uuid()) @map("user_id")
+  email             String            @unique
+  passwordHash      String            @map("password_hash")
+  name              String
+  subscriptionTier  String            @default("free") @map("subscription_tier")
+  creditsBalance    Int               @default(0) @map("credits_balance")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  
+  projects          Project[]
+  billingRecords    BillingRecord[]
+  notifications     Notification[]
+  teamMembers       TeamMember[]
+
+  @@map("users")
+}
+
+model Project {
+  id                  String      @id @default(uuid()) @map("project_id")
+  userId              String      @map("user_id")
+  title               String
+  description         String?
+  promptText          String      @map("prompt_text") @db.Text
+  targetLengthMinutes Int         @map("target_length_minutes")
+  style               String
+  status              String      @default("draft")
+  currentVersionId    String?     @map("version_id")
+  thumbnailUrl        String?     @map("thumbnail_url")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  completedAt         DateTime?   @map("completed_at")
+  
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentVersion      Version?    @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  
+  versions            Version[]   @relation("ProjectVersions")
+  characters          Character[]
+  scenes              Scene[]
+  assets              Asset[]
+  renderJobs          RenderJob[]
+  billingRecords      BillingRecord[]
+
+  @@index([userId])
+  @@map("projects")
+}
+
+model Version {
+  id              String    @id @default(uuid()) @map("version_id")
+  projectId       String    @map("project_id")
+  versionNumber   Int       @map("version_number")
+  changesSummary  String?   @map("changes_summary") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  project         Project   @relation("ProjectVersions", fields: [projectId], references: [id], onDelete: Cascade)
+  currentProjects Project[] @relation("CurrentVersion")
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId])
+  @@map("versions")
+}
+
+model Character {
+  id              String          @id @default(uuid()) @map("character_id")
+  projectId       String          @map("project_id")
+  name            String
+  role            String
+  imageUrl        String?         @map("image_url")
+  imageMetadata   Json?           @map("image_metadata")
+  voiceStyleId    String?         @map("voice_style_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  voiceStyle      VoiceStyle?     @relation(fields: [voiceStyleId], references: [id])
+  sceneCharacters SceneCharacter[]
+
+  @@index([projectId])
+  @@map("characters")
+}
+
+model VoiceStyle {
+  id          String      @id @default(uuid()) @map("voice_style_id")
+  name        String
+  language    String
+  accent      String
+  description String?
+  sampleUrl   String?     @map("sample_url")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  characters  Character[]
+
+  @@map("voice_styles")
+}
+
+model Scene {
+  id                String          @id @default(uuid()) @map("scene_id")
+  projectId         String          @map("project_id")
+  sceneNumber       Int             @map("scene_number")
+  title             String
+  startTimeSeconds  Int             @map("start_time_seconds")
+  endTimeSeconds    Int             @map("end_time_seconds")
+  status            String          @default("pending")
+  storyboardUrl     String?         @map("storyboard_url")
+  dialogueText      String?         @map("dialogue_text") @db.Text
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sceneCharacters   SceneCharacter[]
+
+  @@unique([projectId, sceneNumber])
+  @@index([projectId])
+  @@map("scenes")
+}
+
+model SceneCharacter {
+  id          String    @id @default(uuid())
+  sceneId     String    @map("scene_id")
+  characterId String    @map("character_id")
+  
+  scene       Scene     @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([sceneId, characterId])
+  @@index([sceneId])
+  @@index([characterId])
+  @@map("scene_characters")
+}
+
+model Asset {
+  id          String    @id @default(uuid()) @map("asset_id")
+  projectId   String?   @map("project_id")
+  type        String
+  url         String
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@map("assets")
+}
+
+model RenderJob {
+  id          String    @id @default(uuid()) @map("job_id")
+  projectId   String    @map("project_id")
+  jobType     String    @map("job_type")
+  payload     Json?
+  status      String    @default("queued")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  outputUrl   String?   @map("output_url")
+  errorMessage String?  @map("error_message") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+  @@map("render_jobs")
+}
+
+model BillingRecord {
+  id            String    @id @default(uuid()) @map("billing_id")
+  userId        String    @map("user_id")
+  projectId     String?   @map("project_id")
+  creditsUsed   Int       @map("credits_used")
+  amountCharged Decimal   @map("amount_charged") @db.Decimal(10, 2)
+  description   String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("billing_records")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @map("notification_id")
+  userId    String    @map("user_id")
+  type      String
+  payload   Json?
+  isRead    Boolean   @default(false) @map("is_read")
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model Team {
+  id          String       @id @default(uuid()) @map("team_id")
+  name        String
+  createdAt   DateTime     @default(now()) @map("created_at")
+  
+  members     TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @default(uuid()) @map("team_member_id")
+  teamId    String   @map("team_id")
+  userId    String   @map("user_id")
+  role      String
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("team_members")
+}
